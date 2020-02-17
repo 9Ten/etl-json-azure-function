@@ -26,35 +26,47 @@ params = urllib.parse.quote_plus(
     f"PWD={password}"
 )
 engine = sa.create_engine("mssql+pyodbc:///?odbc_connect={}".format(params))
-print(engine)
 
 import json
 import codecs
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
-    container = req.params.get('container')
-    if container:
+    # container = req.params.get('container')
+    container = "zendesk"
+    tickets = req.params.get('tickets')
+    print(tickets)
+    if tickets:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-        container_client = blob_service_client.get_container_client("zendesk")
-        blob_list = container_client.list_blobs("comments/")
-        blob_name_list = []
-        for blob in blob_list:
-            blob_client = blob_service_client.get_blob_client(container, blob.name)
-            test = [blob_client, container, blob.name]
-            file_path = str(blob.name)
-            with open(file_path, "wb") as my_blob:
-                download_stream = blob_client.download_blob()
-                my_blob.write(download_stream.readall())
-            break
-        
-        # write the DataFrame to a table in the sql database
-        object_dict = json.load(codecs.open(file_path, 'r', 'utf-8-sig'))
-        object_dict = object_dict['comments']
-        object_dict = [{comment['id'], comment['author_id']} for comment in object_dict]
-        df = pd.DataFrame(object_dict)
-        df.to_sql("comments_azure_function", engine, index=False)
+        # container_client = blob_service_client.get_container_client("zendesk")
+        # blob_list = container_client.list_blobs("comments/")
+        # blob_name_list = []
+        # for blob in blob_list:
 
+        file_path = str('comments/' + tickets)
+        blob_client = blob_service_client.get_blob_client(container, file_path)
+        # test = [blob_client, container, blob.name]
+        with open(tickets, "wb") as my_blob:
+            download_stream = blob_client.download_blob()
+            my_blob.write(download_stream.readall())
+        
+        object_dict = json.load(codecs.open(file_path, 'r', 'utf-8-sig'))
+        file_name = os.path.split(file_path)
+        tickets = file_name[1].split('.')[0]
+        object_dict = object_dict['comments']
+        object_dict = [{
+                'tickets': tickets,
+                'id': comment['id'],
+                'type': comment['type'],
+                'author_id': comment['author_id'],
+                'body': comment['body'],
+                'html_body': comment['html_body'],
+                'plain_body': comment['plain_body'],
+                'public': comment['public'],
+                'audit_id': comment['audit_id'],
+                'created_at': comment['created_at']} for comment in object_dict]
+        df = pd.DataFrame(object_dict)
+        df.to_sql("comments_azure_function_2", engine, index=False, if_exists='append')
         return func.HttpResponse(f"container {str(object_dict)}!")
     else:
         return func.HttpResponse(

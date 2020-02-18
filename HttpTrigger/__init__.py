@@ -55,6 +55,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 'audit_id': comment['audit_id'],
                 'created_at': comment['created_at']
             } for comment in object_dict]
+        try:
+            engine.execute(f"DELETE FROM comments_azure_function WHERE tickets={tickets}")
+        except Exception as e:
+            print("Initial table: comments_azure_function")
+            pass
         df = pd.DataFrame(object_dict)
         df.to_sql("comments_azure_function", engine, index=False, if_exists='append')
         return func.HttpResponse(
